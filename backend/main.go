@@ -26,14 +26,6 @@ var (
 	clientsMu sync.Mutex
 )
 
-func sendWSMessage(fileID string, msg interface{}) {
-	clientsMu.Lock()
-	defer clientsMu.Unlock()
-	if ws, ok := clients[fileID]; ok {
-		ws.WriteJSON(msg)
-	}
-}
-
 type ChunkMeta struct {
 	ChunkIndex  int    `form:"chunkIndex"`
 	TotalChunks int    `form:"totalChunks"`
@@ -48,6 +40,14 @@ type MergeMeta struct {
 
 type Handler struct {
 	db *pgxpool.Pool
+}
+
+func sendWSMessage(fileID string, msg interface{}) {
+	clientsMu.Lock()
+	defer clientsMu.Unlock()
+	if ws, ok := clients[fileID]; ok {
+		ws.WriteJSON(msg)
+	}
 }
 
 func MergeChunks(fileName string, totalChunks int) error {
@@ -151,7 +151,7 @@ func handleProgressWS(c *gin.Context) {
 
 func main() {
 	// db conniction
-	dbpool, err := pgxpool.New(context.Background(), "postgres://root:toor@localhost:5432/pace_db")
+	dbpool, err := pgxpool.New(context.Background(), "postgres://root:toor@localhost:5432/pace_db?pool_max_conns=10")
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Unable to create connection pool: %v\n", err)
 		os.Exit(1)

@@ -24,6 +24,19 @@ type ProcessMeta struct {
 	FileID   string `form:"fileId" json:"fileId"`
 }
 
+func (s *Student) Validate() error {
+	if s.Name == "" {
+		return fmt.Errorf("name is required")
+	}
+	if s.Subject == "" {
+		return fmt.Errorf("subject is required")
+	}
+	if s.Grade < 0 || s.Grade > 100 {
+		return fmt.Errorf("invalid grade")
+	}
+	return nil
+}
+
 func (h *Handler) insertBatch(students []Student) error {
 	rows := make([][]interface{}, len(students))
 
@@ -90,7 +103,7 @@ func (h *Handler) processFile(fileName string, fileID string) {
 	}
 
 	chunkSize := 20000 // tune this
-	workerCount := 5   // VERY important
+	workerCount := 10  // VERY important
 	batch := make([]Student, 0, chunkSize)
 	jobs := make(chan []Student)
 
@@ -122,6 +135,10 @@ func (h *Handler) processFile(fileName string, fileID string) {
 	}()
 
 	for s := range studentsChan {
+		if err := s.Validate(); err != nil {
+			fmt.Println("Validation error:", err)
+			continue
+		}
 		batch = append(batch, s)
 
 		if len(batch) == chunkSize {
