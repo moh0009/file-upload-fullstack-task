@@ -64,7 +64,7 @@ const StudentModal = ({ isOpen, onClose, student, mode = "view", onSuccess }) =>
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             onClick={onClose}
-            className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-[150]"
+            className="fixed inset-0 bg-black/60 backdrop-blur-md z-[150] rounded-[2.5rem]"
           />
 
           {/* Modal Container */}
@@ -74,25 +74,28 @@ const StudentModal = ({ isOpen, onClose, student, mode = "view", onSuccess }) =>
               animate={{ opacity: 1, scale: 1, y: 0 }}
               exit={{ opacity: 0, scale: 0.9, y: 20 }}
               transition={{ type: "spring", damping: 25, stiffness: 300 }}
-              className="bg-white w-full max-w-lg rounded-[2rem] shadow-2xl border border-slate-100 overflow-hidden pointer-events-auto"
+              className="bg-[#030712] w-full max-w-lg rounded-[2.5rem] shadow-2xl border border-white/10 overflow-hidden pointer-events-auto relative"
             >
+              {/* Background Glow */}
+              <div className="absolute top-0 left-0 -translate-x-1/2 -translate-y-1/2 h-64 w-64 rounded-full bg-indigo-600/10 blur-[100px] -z-10" />
+              
               {/* Header */}
-              <div className="relative h-32 bg-gradient-to-br from-indigo-500 to-purple-600 p-8">
+              <div className="relative h-40 bg-gradient-to-br from-indigo-600 to-purple-700 p-8 flex items-end">
                 <button
                   onClick={onClose}
-                  className="absolute top-6 right-6 p-2 bg-white/10 hover:bg-white/20 text-white rounded-full transition-colors"
+                  className="absolute top-6 right-6 p-2 bg-white/10 hover:bg-white/20 text-white rounded-xl transition-all"
                 >
-                  <X size={20} />
+                  <X size={22} />
                 </button>
-                <div className="flex items-center gap-5 mt-4">
-                  <div className="w-16 h-16 bg-white rounded-2xl shadow-lg flex items-center justify-center text-indigo-600">
-                    <User size={32} />
+                <div className="flex items-center gap-6 w-full">
+                  <div className="w-20 h-20 bg-white/10 backdrop-blur-md rounded-2xl border border-white/20 shadow-2xl flex items-center justify-center text-white shrink-0">
+                    <User size={40} />
                   </div>
-                  <div>
-                    <h2 className="text-2xl font-bold text-white leading-tight">
-                      {currentMode === "edit" ? "Edit Academic Record" : "Student Credentials"}
+                  <div className="min-w-0">
+                    <h2 className="text-2xl md:text-3xl font-black text-white leading-tight truncate">
+                      {currentMode === "edit" ? "Edit Record" : "Student profile"}
                     </h2>
-                    <p className="text-indigo-100 text-sm font-medium">Registry ID: #{student.id}</p>
+                    <p className="text-white/60 text-sm font-bold uppercase tracking-widest">#{student.id} ClusterID</p>
                   </div>
                 </div>
               </div>
@@ -100,78 +103,79 @@ const StudentModal = ({ isOpen, onClose, student, mode = "view", onSuccess }) =>
               {/* Content */}
               <div className="p-8">
                 {currentMode === "view" ? (
-                  <div className="space-y-6">
+                  <div className="space-y-8">
                     <div className="grid grid-cols-2 gap-4">
-                      <div className="p-4 bg-slate-50 rounded-2xl border border-slate-100">
-                        <div className="flex items-center gap-2 text-slate-400 mb-1">
-                          <User size={14} />
-                          <span className="text-[10px] font-bold uppercase tracking-wider">Full Name</span>
+                      <div className="p-5 bg-white/[0.03] rounded-2xl border border-white/5 group hover:bg-white/[0.05] transition-colors">
+                        <div className="flex items-center gap-2 text-gray-500 mb-2">
+                          <User size={14} className="group-hover:text-indigo-400 transition-colors" />
+                          <span className="text-[10px] font-black uppercase tracking-[0.2em]">Full Name</span>
                         </div>
-                        <p className="font-bold text-slate-800">{student.name}</p>
+                        <p className="font-bold text-white text-lg tracking-tight">{student.name}</p>
                       </div>
-                      <div className="p-4 bg-slate-50 rounded-2xl border border-slate-100">
-                        <div className="flex items-center gap-2 text-slate-400 mb-1">
-                          <BookOpen size={14} />
-                          <span className="text-[10px] font-bold uppercase tracking-wider">Subject</span>
+                      <div className="p-5 bg-white/[0.03] rounded-2xl border border-white/5 group hover:bg-white/[0.05] transition-colors">
+                        <div className="flex items-center gap-2 text-gray-500 mb-2">
+                          <BookOpen size={14} className="group-hover:text-indigo-400 transition-colors" />
+                          <span className="text-[10px] font-black uppercase tracking-[0.2em]">Subject</span>
                         </div>
-                        <p className="font-bold text-slate-800">{student.subject}</p>
+                        <p className="font-bold text-white text-lg  tracking-tight">{student.subject}</p>
                       </div>
                     </div>
 
-                    <div className="p-6 bg-indigo-50/50 rounded-3xl border border-indigo-100 flex items-center justify-between">
-                      <div className="flex items-center gap-4">
-                        <div className="w-12 h-12 bg-white rounded-xl shadow-sm flex items-center justify-center text-indigo-600">
-                          <GraduationCap size={24} />
+                    <div className="p-8 bg-indigo-600/5 rounded-[2rem] border border-indigo-500/20 flex items-center justify-between shadow-inner">
+                      <div className="flex items-center gap-5">
+                        <div className="w-14 h-14 bg-indigo-600/20 rounded-2xl border border-indigo-500/30 flex items-center justify-center text-indigo-400 shadow-[0_0_20px_rgba(79,70,229,0.2)]">
+                          <GraduationCap size={28} />
                         </div>
                         <div>
-                          <p className="text-xs font-bold text-indigo-400 uppercase tracking-widest mb-0.5">Current Grade</p>
-                          <p className="text-2xl font-black text-indigo-900">{student.grade}%</p>
+                          <p className="text-[10px] font-black text-indigo-400/60 uppercase tracking-[0.3em] mb-1">Compute Score</p>
+                          <p className="text-4xl font-black text-white">{student.grade}%</p>
                         </div>
                       </div>
                       <div className={cn(
-                        "px-4 py-2 rounded-xl text-sm font-black",
-                        student.grade >= 50 ? "bg-emerald-100 text-emerald-700" : "bg-rose-100 text-rose-600"
+                        "px-5 py-2 rounded-xl text-xs font-black shadow-lg uppercase tracking-widest",
+                        student.grade >= 50 ? "bg-emerald-500/10 text-emerald-400 border border-emerald-500/20" : "bg-rose-500/10 text-rose-400 border border-rose-500/20"
                       )}>
                         {student.grade >= 50 ? "PASSING" : "FAILING"}
                       </div>
                     </div>
 
-                    <div className="flex gap-3">
+                    <div className="flex gap-4 pt-2">
                       <button
                         onClick={() => setCurrentMode("edit")}
-                        className="flex-1 bg-white border-2 border-slate-200 text-slate-700 font-bold py-4 rounded-2xl hover:bg-slate-50 hover:border-slate-300 transition-all flex items-center justify-center gap-2"
+                        className="flex-1 bg-white/[0.03] border border-white/10 text-white font-bold py-4 rounded-2xl hover:bg-white/10 hover:border-indigo-500/40 transition-all flex items-center justify-center gap-3"
                       >
                         <Edit3 size={18} />
                         Edit Profile
                       </button>
                       <button
                         onClick={onClose}
-                        className="flex-1 bg-indigo-600 text-white font-bold py-4 rounded-2xl hover:bg-indigo-700 shadow-lg shadow-indigo-200 transition-all"
+                        className="flex-1 bg-indigo-600 text-white font-black py-4 rounded-2xl hover:bg-indigo-500 hover:scale-[1.02] shadow-[0_0_30px_rgba(79,70,229,0.3)] transition-all"
                       >
                         Acknowledge
                       </button>
                     </div>
                   </div>
                 ) : (
-                  <form onSubmit={handleUpdate} className="space-y-5">
-                    <div className="space-y-2">
-                      <label className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] ml-1">Student Name</label>
-                      <div className="relative">
-                        <User className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
+                  <form onSubmit={handleUpdate} className="space-y-6">
+                    <div className="space-y-3">
+                      <label className="text-[10px] font-black text-gray-500 uppercase tracking-[0.3em] ml-1">Student Name</label>
+                      <div className="relative group">
+                        <User className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-500 group-focus-within:text-indigo-400 transition-colors" size={18} />
                         <input
                           required
-                          className="w-full bg-slate-50 border border-slate-200 rounded-2xl pl-12 pr-4 py-4 font-bold text-slate-800 focus:ring-2 focus:ring-indigo-500/20 focus:bg-white outline-none transition-all"
+                          className="w-full bg-white/[0.03] border border-white/10 rounded-2xl pl-12 pr-4 py-4 font-bold text-white focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500/50 outline-none transition-all placeholder:text-gray-700"
                           type="text"
+                          placeholder="John Doe"
                           value={formData.name}
                           onChange={(e) => setFormData({ ...formData, name: e.target.value })}
                         />
                       </div>
                     </div>
 
-                    <div className="space-y-2">
-                      <label className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] ml-1">Academic Subject</label>
-                      <div className="relative">
-                        <BookOpen className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 z-10" size={18} />
+                    <div className="space-y-3">
+                      <label className="text-[10px] font-black text-gray-500 uppercase tracking-[0.3em] ml-1">Academic Subject</label>
+                      <div className="relative group">
+                        <BookOpen className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-500 z-10 group-focus-within:text-indigo-400 transition-colors" size={18} />
                         <Dropdown 
                           options={subjects}
                           value={subjects.find(s => s.value === formData.subject)}
@@ -182,44 +186,47 @@ const StudentModal = ({ isOpen, onClose, student, mode = "view", onSuccess }) =>
                       </div>
                     </div>
 
-                    <div className="space-y-2">
-                      <label className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] ml-1">Grade Score ({formData.grade}%)</label>
+                    <div className="space-y-4">
+                      <div className="flex justify-between items-center ml-1">
+                          <label className="text-[10px] font-black text-gray-500 uppercase tracking-[0.3em]">Grade Score</label>
+                          <span className="text-xl font-black text-white">{formData.grade}%</span>
+                      </div>
                       <div className="px-1">
                         <input
                           type="range"
                           min="0"
                           max="100"
-                          className="w-full h-2 bg-slate-100 rounded-lg appearance-none cursor-pointer accent-indigo-600"
+                          className="w-full h-2 bg-white/10 rounded-lg appearance-none cursor-pointer accent-indigo-500"
                           value={formData.grade}
                           onChange={(e) => setFormData({ ...formData, grade: parseInt(e.target.value) })}
                         />
-                        <div className="flex justify-between mt-2 px-1">
-                          <span className="text-[10px] font-bold text-rose-400">0%</span>
-                          <span className="text-[10px] font-bold text-slate-300">Target: 50%+</span>
-                          <span className="text-[10px] font-bold text-emerald-400">100%</span>
+                        <div className="flex justify-between mt-3 px-1">
+                          <span className="text-[10px] font-black text-rose-500 uppercase tracking-widest">FAIL</span>
+                          <span className="text-[10px] font-black text-gray-600 uppercase tracking-widest">Threshold: 50%</span>
+                          <span className="text-[10px] font-black text-emerald-500 uppercase tracking-widest">EXCEL</span>
                         </div>
                       </div>
                     </div>
 
-                    <div className="flex gap-3 pt-4">
+                    <div className="flex gap-4 pt-6">
                       <button
                         type="button"
                         onClick={() => setCurrentMode("view")}
-                        className="flex-1 bg-slate-100 text-slate-600 font-bold py-4 rounded-2xl hover:bg-slate-200 transition-all"
+                        className="flex-1 bg-white/[0.03] border border-white/5 text-gray-400 font-bold py-4 rounded-2xl hover:bg-white/10 hover:text-white transition-all"
                       >
                         Cancel
                       </button>
                       <button
                         type="submit"
                         disabled={isSubmitting}
-                        className="flex-3 bg-indigo-600 text-white font-bold py-4 px-8 rounded-2xl hover:bg-indigo-700 shadow-lg shadow-indigo-200 transition-all flex items-center justify-center gap-2 disabled:opacity-50"
+                        className="flex-[2] bg-indigo-600 text-white font-black py-4 px-8 rounded-2xl hover:bg-indigo-500 hover:scale-[1.02] shadow-[0_0_30px_rgba(79,70,229,0.3)] transition-all flex items-center justify-center gap-3 disabled:opacity-50"
                       >
                         {isSubmitting ? (
-                          <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                          <div className="w-6 h-6 border-4 border-white/20 border-t-white rounded-full animate-spin" />
                         ) : (
                           <>
-                            <Save size={18} />
-                            Save Changes
+                            <Save size={20} />
+                            Commit Changes
                           </>
                         )}
                       </button>

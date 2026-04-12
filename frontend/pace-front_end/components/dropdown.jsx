@@ -14,20 +14,22 @@ const Dropdown = ({ options, value, onChange, placeholder, className, menuPlacem
                 menuPortal: (base) => ({ ...base, zIndex: 9999 }),
                 control: (base, state) => ({
                     ...base,
-                    backgroundColor: 'white',
-                    borderColor: state.isFocused ? '#6366f1' : '#e2e8f0',
-                    borderRadius: '0.75rem',
-                    minHeight: '40px',
-                    boxShadow: state.isFocused ? '0 0 0 2px rgba(99, 102, 241, 0.2)' : 'none',
+                    backgroundColor: 'rgba(255, 255, 255, 0.03)',
+                    borderColor: state.isFocused ? '#6366f1' : 'rgba(255, 255, 255, 0.1)',
+                    borderRadius: '1rem',
+                    minHeight: '48px',
+                    width : "100%",
+                    boxShadow: state.isFocused ? '0 0 0 4px rgba(99, 102, 241, 0.1)' : 'none',
                     '&:hover': {
-                        borderColor: state.isFocused ? '#6366f1' : '#cbd5e1'
+                        borderColor: 'rgba(99, 102, 241, 0.5)'
                     }
                 }),
                 menu: (base) => ({
                     ...base,
-                    borderRadius: '0.75rem',
-                    border: '1px solid #e2e8f0',
-                    boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06)',
+                    backgroundColor: '#030712',
+                    borderRadius: '1rem',
+                    border: '1px solid rgba(255, 255, 255, 0.1)',
+                    boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.5)',
                     overflow: 'hidden',
                     zIndex: 50
                 }),
@@ -36,24 +38,25 @@ const Dropdown = ({ options, value, onChange, placeholder, className, menuPlacem
                     backgroundColor: state.isSelected
                         ? '#4f46e5'
                         : state.isFocused
-                            ? '#f8fafc'
-                            : 'white',
-                    color: state.isSelected ? 'white' : '#334155',
+                            ? 'rgba(255, 255, 255, 0.05)'
+                            : 'transparent',
+                    color: state.isSelected ? 'white' : '#94a3b8',
                     cursor: 'pointer',
                     fontSize: '0.875rem',
-                    padding: '10px 16px',
+                    padding: '12px 16px',
                     '&:active': {
-                        backgroundColor: state.isSelected ? '#4f46e5' : '#f1f5f9',
+                        backgroundColor: '#4f46e5',
                     }
                 }),
                 singleValue: (base) => ({
                     ...base,
-                    color: '#0f172a',
+                    color: 'white',
                     fontSize: '0.875rem',
+                    fontWeight: '600'
                 }),
                 placeholder: (base) => ({
                     ...base,
-                    color: '#94a3b8',
+                    color: '#4b5563',
                     fontSize: '0.875rem',
                 }),
                 indicatorSeparator: () => ({
@@ -61,9 +64,9 @@ const Dropdown = ({ options, value, onChange, placeholder, className, menuPlacem
                 }),
                 dropdownIndicator: (base) => ({
                     ...base,
-                    color: '#94a3b8',
+                    color: '#4b5563',
                     '&:hover': {
-                        color: '#64748b'
+                        color: '#6366f1'
                     }
                 })
             }}

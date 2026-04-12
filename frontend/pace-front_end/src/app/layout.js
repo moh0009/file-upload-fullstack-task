@@ -1,6 +1,12 @@
 import { Inter } from "next/font/google";
 import "./globals.css";
 
+export const metadata = {
+  title: "PACE | Smart Student Data Management",
+  description: "Upload, process, and analyze student datasets with lightning speed and premium security using PACE.",
+  keywords: ["student data", "file upload", "analytics", "education management", "data processing"],
+};
+
 import { NotificationProvider } from "../../context/NotificationContext";
 
 const inter = Inter({

@@ -6,11 +6,17 @@ import { cn } from "../lib/utils";
  * A modern dual-range slider for filtering grades 0-100.
  */
 export default function GradeSlider({ min = 0, max = 100, values, onChange }) {
-  const [minVal, setMinVal] = useState(values[0] || min);
-  const [maxVal, setMaxVal] = useState(values[1] || max);
+  const [minVal, setMinVal] = useState(values[0] ?? min);
+  const [maxVal, setMaxVal] = useState(values[1] ?? max);
   const minSelectRef = useRef(null);
   const maxSelectRef = useRef(null);
   const rangeRef = useRef(null);
+
+  // Sync internal state when parent resets/changes values externally
+  useEffect(() => {
+    setMinVal(values[0] ?? min);
+    setMaxVal(values[1] ?? max);
+  }, [values[0], values[1]]);
 
   // Convert value to percentage
   const getPercent = useCallback(
@@ -64,13 +70,13 @@ export default function GradeSlider({ min = 0, max = 100, values, onChange }) {
   }, [minVal, maxVal]);
 
   return (
-    <div className="flex flex-col gap-5 w-full sm:w-[240px] px-2 pt-6">
-      <div className="flex justify-between items-center mb-1">
-        <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Grade Range</span>
-        <div className="flex items-center gap-1.5">
-            <span className="px-2 py-0.5 bg-indigo-50 text-indigo-600 rounded-md text-[11px] font-bold">{minVal}</span>
-            <span className="text-slate-400 text-[10px]">to</span>
-            <span className="px-2 py-0.5 bg-indigo-50 text-indigo-600 rounded-md text-[11px] font-bold">{maxVal}</span>
+    <div className="flex flex-col w-full">
+      <div className="flex justify-between items-center mb-4">
+        <span className="text-[10px] font-black text-gray-500 uppercase tracking-[0.2em]">Compute Range</span>
+        <div className="flex items-center gap-2">
+            <span className="px-2 py-0.5 bg-indigo-600/20 text-indigo-400 border border-indigo-500/20 rounded-lg text-[11px] font-black">{minVal}%</span>
+            <span className="text-gray-600 text-[10px] font-bold">»</span>
+            <span className="px-2 py-0.5 bg-indigo-600/20 text-indigo-400 border border-indigo-500/20 rounded-lg text-[11px] font-black">{maxVal}%</span>
         </div>
       </div>
       
@@ -97,8 +103,8 @@ export default function GradeSlider({ min = 0, max = 100, values, onChange }) {
 
         {/* Visual Slider */}
         <div className="slider">
-          <div className="slider__track bg-slate-100" />
-          <div ref={rangeRef} className="slider__range primary-gradient shadow-sm shadow-indigo-200" />
+          <div className="slider__track bg-white/10" />
+          <div ref={rangeRef} className="slider__range bg-indigo-600 shadow-[0_0_15px_rgba(79,70,229,0.4)]" />
         </div>
       </div>
     </div>

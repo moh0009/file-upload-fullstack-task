@@ -32,7 +32,7 @@ const MinimalDropdown = ({ actions, student, onSuccess }) => {
         setModalMode("view");
         setIsModalOpen(true);
       }, 
-      color: "text-slate-600" 
+      color: "text-gray-400 group-hover:text-white" 
     },
     { 
       label: "Edit Student", 
@@ -41,7 +41,7 @@ const MinimalDropdown = ({ actions, student, onSuccess }) => {
         setModalMode("edit");
         setIsModalOpen(true);
       }, 
-      color: "text-indigo-600" 
+      color: "text-indigo-400 group-hover:text-indigo-300" 
     },
     { label: "Delete Student", icon: <Trash2 size={14} />, onClick: async () => {
       try {
@@ -53,7 +53,7 @@ const MinimalDropdown = ({ actions, student, onSuccess }) => {
       } catch (err) {
         showNotification({ message: "Failed to delete student", type: "error" });
       }
-    }, color: "text-rose-500" },
+    }, color: "text-rose-500 group-hover:text-rose-400" },
   ];
 
   const displayActions = actions || defaultActions;
@@ -64,10 +64,10 @@ const MinimalDropdown = ({ actions, student, onSuccess }) => {
         <button
           onClick={() => setIsOpen(!isOpen)}
           className={cn(
-            "p-2 rounded-full transition-all duration-200 flex items-center justify-center",
+            "p-2 rounded-xl transition-all duration-300 flex items-center justify-center border",
             isOpen 
-              ? "bg-indigo-50 text-indigo-600 ring-2 ring-indigo-500/20" 
-              : "text-slate-400 hover:bg-slate-100 hover:text-slate-600"
+              ? "bg-indigo-600 text-white border-indigo-500 shadow-[0_0_15px_rgba(79,70,229,0.3)]" 
+              : "text-gray-500 border-white/5 hover:bg-white/5 hover:text-white"
           )}
         >
           <MoreVertical size={18} />
@@ -79,9 +79,12 @@ const MinimalDropdown = ({ actions, student, onSuccess }) => {
               initial={{ opacity: 0, scale: 0.95, y: -10 }}
               animate={{ opacity: 1, scale: 1, y: 0 }}
               exit={{ opacity: 0, scale: 0.95, y: -10 }}
-              transition={{ duration: 0.15, ease: "easeOut" }}
-              className="absolute right-0 mt-2 w-48 bg-white rounded-2xl shadow-xl border border-slate-100 py-2 z-[100] overflow-hidden"
+              transition={{ duration: 0.2, ease: "easeOut" }}
+              className="absolute right-0 mt-3 w-52 bg-[#030712] rounded-[1.25rem] shadow-2xl border border-white/10 py-2.5 z-[100] overflow-hidden backdrop-blur-2xl"
             >
+              <div className="px-4 py-2 mb-1 border-b border-white/5">
+                 <p className="text-[10px] font-black text-gray-600 uppercase tracking-widest">Student Actions</p>
+              </div>
               {displayActions.map((action, index) => (
                 <button
                   key={index}
@@ -90,13 +93,13 @@ const MinimalDropdown = ({ actions, student, onSuccess }) => {
                     setIsOpen(false);
                   }}
                   className={cn(
-                    "w-full px-4 py-2.5 text-sm flex items-center gap-3 transition-colors text-left",
-                    "hover:bg-slate-50 active:bg-slate-100",
-                    action.color || "text-slate-600"
+                    "w-full px-4 py-3 text-xs flex items-center gap-3 transition-all text-left group",
+                    "hover:bg-white/[0.04]",
+                    action.color || "text-gray-400"
                   )}
                 >
-                  <span className="shrink-0">{action.icon}</span>
-                  <span className="font-medium">{action.label}</span>
+                  <span className="shrink-0 transition-transform group-hover:scale-110">{action.icon}</span>
+                  <span className="font-bold tracking-wide">{action.label}</span>
                 </button>
               ))}
             </motion.div>
