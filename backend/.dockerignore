@@ -1,0 +1,35 @@
+# Ignore local Go artifacts
+bin/
+obj/
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+*.test
+*.out
+vendor/
+
+# Ignore local upload/data directories
+uploads/
+db-data/
+redis-data/
+
+# Ignore env files and secrets
+.env
+.env.local
+
+# Ignore OS files
+.DS_Store
+
+# Ignore IDE files
+.vscode/
+.idea/
+
+# Ignore Docker files themselves
+Dockerfile
+docker-compose.yaml
+
+# Ignore Git
+.git/
+.gitignore

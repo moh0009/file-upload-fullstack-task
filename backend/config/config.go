@@ -45,7 +45,33 @@ func (c *Config) InitDatabase() *pgxpool.Pool {
 	if err != nil {
 		log.Fatalf("Database connection error: %v", err)
 	}
+
+	// Initialize tables if they don't exist
+	initSchema(dbpool)
+
 	return dbpool
+}
+
+func initSchema(pool *pgxpool.Pool) {
+	query := `
+		CREATE TABLE IF NOT EXISTS students_staging (
+			id SERIAL PRIMARY KEY,
+			name TEXT,
+			subject TEXT,
+			grade TEXT
+		);
+		CREATE TABLE IF NOT EXISTS students (
+			id SERIAL PRIMARY KEY,
+			name TEXT,
+			subject TEXT,
+			grade INTEGER
+		);
+	`
+	_, err := pool.Exec(context.Background(), query)
+	if err != nil {
+		log.Fatalf("Failed to initialize database schema: %v", err)
+	}
+	log.Println("Database schema initialized successfully")
 }
 
 func (c *Config) InitRedis() *redis.Client {

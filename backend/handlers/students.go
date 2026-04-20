@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/gin-gonic/gin"
+	apperrors "github.com/moh0009/file-upload-fullstack-task/backend/errors"
 )
 
 type StudentDB struct {
@@ -39,13 +40,21 @@ func (h *Handler) GetStudentsCount(c *gin.Context) {
 		argCount++
 	}
 	if gradeMinStr != "" {
-		val, _ := strconv.Atoi(gradeMinStr)
+		val, err := strconv.Atoi(gradeMinStr)
+		if err != nil {
+			apperrors.Respond(c, apperrors.BadRequest("gradeMin must be an integer"))
+			return
+		}
 		whereClauses = append(whereClauses, fmt.Sprintf("grade >= $%d", argCount))
 		args = append(args, val)
 		argCount++
 	}
 	if gradeMaxStr != "" {
-		val, _ := strconv.Atoi(gradeMaxStr)
+		val, err := strconv.Atoi(gradeMaxStr)
+		if err != nil {
+			apperrors.Respond(c, apperrors.BadRequest("gradeMax must be an integer"))
+			return
+		}
 		whereClauses = append(whereClauses, fmt.Sprintf("grade <= $%d", argCount))
 		args = append(args, val)
 		argCount++
@@ -58,7 +67,7 @@ func (h *Handler) GetStudentsCount(c *gin.Context) {
 	row := h.Db.QueryRow(context.Background(), query, args...)
 	var count int
 	if err := row.Scan(&count); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Database error"})
+		apperrors.Respond(c, apperrors.Internal("failed to count student records", err))
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{"count": count})
@@ -67,8 +76,8 @@ func (h *Handler) GetStudentsCount(c *gin.Context) {
 func (h *Handler) GetStudents(c *gin.Context) {
 	pageSizeStr := c.Query("pageSize")
 	pageSize, err := strconv.Atoi(pageSizeStr)
-	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid page size"})
+	if err != nil || pageSize <= 0 {
+		apperrors.Respond(c, apperrors.BadRequest("pageSize must be a positive integer"))
 		return
 	}
 
@@ -82,7 +91,7 @@ func (h *Handler) GetStudents(c *gin.Context) {
 	gradeMinStr := c.Query("gradeMin")
 	gradeMaxStr := c.Query("gradeMax")
 
-	// Security: Validate sort column
+	// Security: whitelist allowed sort columns
 	allowedColumns := map[string]bool{"id": true, "name": true, "subject": true, "grade": true}
 
 	sortCol := "id"
@@ -100,7 +109,6 @@ func (h *Handler) GetStudents(c *gin.Context) {
 	query := "SELECT id, name, subject, grade FROM students"
 	var args []interface{}
 	argCount := 1
-
 	whereClauses := []string{}
 
 	if nameSearch != "" {
@@ -114,29 +122,40 @@ func (h *Handler) GetStudents(c *gin.Context) {
 		argCount++
 	}
 	if gradeMinStr != "" {
-		val, _ := strconv.Atoi(gradeMinStr)
+		val, err := strconv.Atoi(gradeMinStr)
+		if err != nil {
+			apperrors.Respond(c, apperrors.BadRequest("gradeMin must be an integer"))
+			return
+		}
 		whereClauses = append(whereClauses, fmt.Sprintf("grade >= $%d", argCount))
 		args = append(args, val)
 		argCount++
 	}
 	if gradeMaxStr != "" {
-		val, _ := strconv.Atoi(gradeMaxStr)
+		val, err := strconv.Atoi(gradeMaxStr)
+		if err != nil {
+			apperrors.Respond(c, apperrors.BadRequest("gradeMax must be an integer"))
+			return
+		}
 		whereClauses = append(whereClauses, fmt.Sprintf("grade <= $%d", argCount))
 		args = append(args, val)
 		argCount++
 	}
 
-	// Keyset pagination logic
+	// Keyset pagination
 	if afterIdStr != "" {
-		afterId, _ := strconv.Atoi(afterIdStr)
+		afterId, err := strconv.Atoi(afterIdStr)
+		if err != nil {
+			apperrors.Respond(c, apperrors.BadRequest("afterId must be an integer"))
+			return
+		}
 		if sortCol == "id" {
+			op := ">"
 			if isDesc {
-				whereClauses = append(whereClauses, fmt.Sprintf("id < $%d", argCount))
-				args = append(args, afterId)
-			} else {
-				whereClauses = append(whereClauses, fmt.Sprintf("id > $%d", argCount))
-				args = append(args, afterId)
+				op = "<"
 			}
+			whereClauses = append(whereClauses, fmt.Sprintf("id %s $%d", op, argCount))
+			args = append(args, afterId)
 			argCount++
 		} else {
 			operator := ">"
@@ -148,15 +167,18 @@ func (h *Handler) GetStudents(c *gin.Context) {
 			argCount += 2
 		}
 	} else if beforeIdStr != "" {
-		beforeId, _ := strconv.Atoi(beforeIdStr)
+		beforeId, err := strconv.Atoi(beforeIdStr)
+		if err != nil {
+			apperrors.Respond(c, apperrors.BadRequest("beforeId must be an integer"))
+			return
+		}
 		if sortCol == "id" {
+			op := "<"
 			if isDesc {
-				whereClauses = append(whereClauses, fmt.Sprintf("id > $%d", argCount))
-				args = append(args, beforeId)
-			} else {
-				whereClauses = append(whereClauses, fmt.Sprintf("id < $%d", argCount))
-				args = append(args, beforeId)
+				op = ">"
 			}
+			whereClauses = append(whereClauses, fmt.Sprintf("id %s $%d", op, argCount))
+			args = append(args, beforeId)
 			argCount++
 		} else {
 			operator := "<"
@@ -173,12 +195,10 @@ func (h *Handler) GetStudents(c *gin.Context) {
 		query += " WHERE " + strings.Join(whereClauses, " AND ")
 	}
 
-	// Dynamic Order By
 	orderDir := "ASC"
 	if isDesc {
 		orderDir = "DESC"
 	}
-
 	effectiveOrderDir := orderDir
 	if beforeIdStr != "" {
 		if isDesc {
@@ -199,7 +219,7 @@ func (h *Handler) GetStudents(c *gin.Context) {
 
 	rows, err := h.Db.Query(context.Background(), query, args...)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Database query failed"})
+		apperrors.Respond(c, apperrors.Internal("failed to query student records", err))
 		return
 	}
 	defer rows.Close()
@@ -208,16 +228,22 @@ func (h *Handler) GetStudents(c *gin.Context) {
 	for rows.Next() {
 		var student StudentDB
 		if err := rows.Scan(&student.ID, &student.Name, &student.Subject, &student.Grade); err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to scan student data"})
+			apperrors.Respond(c, apperrors.Internal("failed to read student record", err))
 			return
 		}
 		students = append(students, student)
 	}
 
+	// Reverse for backward pagination
 	if beforeIdStr != "" {
 		for i, j := 0, len(students)-1; i < j; i, j = i+1, j-1 {
 			students[i], students[j] = students[j], students[i]
 		}
+	}
+
+	// Return empty array instead of null
+	if students == nil {
+		students = []StudentDB{}
 	}
 
 	c.JSON(http.StatusOK, students)
@@ -227,38 +253,50 @@ func (h *Handler) DeleteStudent(c *gin.Context) {
 	idStr := c.Param("id")
 	id, err := strconv.Atoi(idStr)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid student ID"})
+		apperrors.Respond(c, apperrors.BadRequest("student ID must be an integer"))
 		return
 	}
 
-	_, err = h.Db.Exec(context.Background(), "DELETE FROM students WHERE id = $1", id)
+	result, err := h.Db.Exec(context.Background(), "DELETE FROM students WHERE id = $1", id)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to delete student"})
+		apperrors.Respond(c, apperrors.Internal("failed to delete student", err))
+		return
+	}
+	if result.RowsAffected() == 0 {
+		apperrors.Respond(c, apperrors.NotFound(fmt.Sprintf("no student found with id %d", id)))
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"message": "Student deleted successfully"})
+	c.JSON(http.StatusOK, gin.H{"message": "student deleted successfully"})
 }
 
 func (h *Handler) UpdateStudent(c *gin.Context) {
 	idStr := c.Param("id")
 	id, err := strconv.Atoi(idStr)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid student ID"})
+		apperrors.Respond(c, apperrors.BadRequest("student ID must be an integer"))
 		return
 	}
 
 	var student StudentDB
 	if err := c.ShouldBindJSON(&student); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid request body"})
+		apperrors.Respond(c, apperrors.BadRequest("invalid request body: name, subject, and grade are required", err))
 		return
 	}
 
-	_, err = h.Db.Exec(context.Background(), "UPDATE students SET name = $1, subject = $2, grade = $3 WHERE id = $4", student.Name, student.Subject, student.Grade, id)
+	result, err := h.Db.Exec(
+		context.Background(),
+		"UPDATE students SET name = $1, subject = $2, grade = $3 WHERE id = $4",
+		student.Name, student.Subject, student.Grade, id,
+	)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update student"})
+		apperrors.Respond(c, apperrors.Internal("failed to update student", err))
+		return
+	}
+	if result.RowsAffected() == 0 {
+		apperrors.Respond(c, apperrors.NotFound(fmt.Sprintf("no student found with id %d", id)))
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"message": "Student updated successfully"})
+	c.JSON(http.StatusOK, gin.H{"message": "student updated successfully"})
 }

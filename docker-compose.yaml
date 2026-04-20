@@ -1,0 +1,92 @@
+services:
+  db:
+    image: postgres:15-alpine
+    restart: always
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_USER: root
+      POSTGRES_PASSWORD: toor
+      POSTGRES_DB: pace_db
+    volumes:
+      - local_pgdata:/var/lib/postgresql/data
+    networks:
+      - pace_network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U root -d pace_db"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  pgadmin:
+    image: dpage/pgadmin4
+    container_name: pgadmin4_container
+    restart: always
+    ports:
+      - "8888:80"
+    environment:
+      PGADMIN_DEFAULT_EMAIL: admin@admin.com
+      PGADMIN_DEFAULT_PASSWORD: toor
+    volumes:
+      - pgadmin-data:/var/lib/pgadmin
+    networks:
+      - pace_network
+
+  redis:
+    image: redis:7-alpine
+    restart: always
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis-data:/data
+    networks:
+      - pace_network
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    restart: always
+    ports:
+      - "8080:8080"
+    environment:
+      DATABASE_URL: "postgres://root:toor@db:5432/pace_db?pool_max_conns=40&pool_min_conns=10"
+      REDIS_ADDR: "redis:6379"
+      SERVER_PORT: "8080"
+      UPLOADS_DIR: "/tmp/uploads"
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - pace_network
+
+  frontend:
+    build:
+      context: ./frontend/pace-front_end
+      dockerfile: Dockerfile
+      args:
+        # Pass the public API URL so the built Next.js bundle knows where to point.
+        # This determines where the browser sends its requests.
+        NEXT_PUBLIC_API_URL: "http://localhost:8080/api"
+    restart: always
+    ports:
+      - "3000:3000"
+    depends_on:
+      - backend
+    networks:
+      - pace_network
+
+volumes:
+  local_pgdata:
+  pgadmin-data:
+  redis-data:
+
+networks:
+  pace_network:

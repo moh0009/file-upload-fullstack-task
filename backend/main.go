@@ -44,6 +44,11 @@ func main() {
 	router := gin.Default()
 	router.Use(cors.New(corsConfig))
 
+	// Health check ping
+	router.GET("/ping", func(c *gin.Context) {
+		c.JSON(http.StatusOK, gin.H{"status": "ok"})
+	})
+
 	// API routes for file upload and processing
 	api := router.Group("/api")
 	api.POST("/upload", handler.UploadFiles)

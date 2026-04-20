@@ -10,6 +10,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/jackc/pgx/v5/pgxpool"
+	apperrors "github.com/moh0009/file-upload-fullstack-task/backend/errors"
 	"github.com/moh0009/file-upload-fullstack-task/backend/config"
 	"github.com/moh0009/file-upload-fullstack-task/backend/progress"
 	"github.com/moh0009/file-upload-fullstack-task/backend/queue"
@@ -49,41 +50,46 @@ func (h *Handler) UploadFiles(c *gin.Context) {
 	var meta ChunkMeta
 	file, err := c.FormFile("file")
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid request"})
+		apperrors.Respond(c, apperrors.BadRequest("file field is required in the multipart form", err))
 		return
 	}
 
 	if err := c.ShouldBind(&meta); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid metadata"})
+		apperrors.Respond(c, apperrors.BadRequest("invalid chunk metadata", err))
 		return
 	}
 
-	// Security: Validate file extension
+	// Validate file extension
 	if !strings.HasSuffix(strings.ToLower(meta.FileName), ".csv") {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Only CSV files are allowed"})
+		apperrors.Respond(c, apperrors.BadRequest("only CSV files are allowed"))
 		return
 	}
 
-	// Security: Check file size
+	// Validate file size
 	if file.Size > h.Cfg.MaxFileSize {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "File too large"})
+		apperrors.Respond(c, apperrors.BadRequest(
+			fmt.Sprintf("file exceeds maximum allowed size of %d bytes", h.Cfg.MaxFileSize),
+		))
 		return
 	}
 
-	// Security: Validate MIME type
-	if file.Header.Get("Content-Type") != "text/csv" && !strings.Contains(file.Header.Get("Content-Type"), "text/csv") {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid file type"})
+	// Validate MIME type
+	ct := file.Header.Get("Content-Type")
+	if ct != "text/csv" && !strings.Contains(ct, "text/csv") {
+		apperrors.Respond(c, apperrors.BadRequest("invalid MIME type: only text/csv is accepted"))
 		return
 	}
 
 	chunkPath := filepath.Join(h.Cfg.UploadsDir, fmt.Sprintf("%s.part_%d", meta.FileName, meta.ChunkIndex))
 	if err := c.SaveUploadedFile(file, chunkPath); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to save chunk"})
+		apperrors.Respond(c, apperrors.Internal(
+			fmt.Sprintf("failed to save chunk %d of %s", meta.ChunkIndex, meta.FileName), err,
+		))
 		return
 	}
 
-	// Send upload progress to frontend via WebSocket
-	progressPct := float64((meta.ChunkIndex + 1)) / float64(meta.TotalChunks) * 100
+	// Report upload progress to the frontend via WebSocket
+	progressPct := float64(meta.ChunkIndex+1) / float64(meta.TotalChunks) * 100
 	if h.ProgressHub != nil {
 		h.ProgressHub.Publish(c.Request.Context(), meta.FileID, map[string]interface{}{
 			"stage":      "uploading",
@@ -93,10 +99,11 @@ func (h *Handler) UploadFiles(c *gin.Context) {
 
 	if meta.ChunkIndex == meta.TotalChunks-1 {
 		if err := h.MergeChunks(meta.FileName, meta.TotalChunks); err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to merge chunks"})
+			apperrors.Respond(c, apperrors.Internal(
+				fmt.Sprintf("failed to merge chunks for %s", meta.FileName), err,
+			))
 			return
 		}
-		// Send final upload complete message
 		if h.ProgressHub != nil {
 			h.ProgressHub.Publish(c.Request.Context(), meta.FileID, map[string]interface{}{
 				"stage":      "uploading",
@@ -112,7 +119,7 @@ func (h *Handler) MergeChunks(fileName string, totalChunks int) error {
 	finalPath := filepath.Join(h.Cfg.UploadsDir, fileName)
 	f, err := os.Create(finalPath)
 	if err != nil {
-		return fmt.Errorf("create final file: %w", err)
+		return fmt.Errorf("create final file %q: %w", finalPath, err)
 	}
 	defer f.Close()
 
@@ -120,12 +127,12 @@ func (h *Handler) MergeChunks(fileName string, totalChunks int) error {
 		chunkPath := filepath.Join(h.Cfg.UploadsDir, fmt.Sprintf("%s.part_%d", fileName, i))
 		cf, err := os.Open(chunkPath)
 		if err != nil {
-			return fmt.Errorf("open chunk %d: %w", i, err)
+			return fmt.Errorf("open chunk %d of %q: %w", i, fileName, err)
 		}
-		_, err = io.Copy(f, cf)
+		_, copyErr := io.Copy(f, cf)
 		cf.Close()
-		if err != nil {
-			return fmt.Errorf("copy chunk %d: %w", i, err)
+		if copyErr != nil {
+			return fmt.Errorf("copy chunk %d of %q: %w", i, fileName, copyErr)
 		}
 		os.Remove(chunkPath)
 	}

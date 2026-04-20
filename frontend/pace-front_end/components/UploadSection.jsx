@@ -1,117 +1,122 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import { motion, AnimatePresence } from "motion/react";
 import { useDropzone } from "react-dropzone";
 import { Play, Upload } from "lucide-react";
-import { cn, uploadChunk, connectWS } from "../lib/utils";
+import { cn, uploadChunk, isNetworkError } from "../lib/utils";
 import fetchAPI from "../lib/utils";
+import { ManagedWebSocket } from "../lib/websocket";
 import File from "./File";
 import DuplicateFileDialog from "./DuplicateFileDialog";
 import { useNotification } from "../context/NotificationContext";
 import { useFiles } from "../context/FileContext";
 
 /**
- * UploadSection Component
- * Handles drag-and-drop file upload, chunked transfers with real progress,
- * and WebSocket-driven processing progress updates.
+ * UploadSection — drag-and-drop file upload with chunked transfers, real-time
+ * WebSocket progress, and automatic reconnection via ManagedWebSocket.
+ *
+ * Accessibility:
+ *  - The outer <section> has role="region" + aria-label.
+ *  - The dropzone div has role="button" + tabIndex so keyboard users can
+ *    trigger it with Enter / Space.
+ *  - A visually-hidden aria-live region announces WS status changes.
+ *  - The Start button has aria-disabled when nothing is pending.
  */
 export default function UploadSection() {
   const { files, addFile, updateFile, removeFile, replaceFile, getFileByName, isHydrated } = useFiles();
   const [duplicateQueue, setDuplicateQueue] = useState([]);
   const [duplicateQueueTotal, setDuplicateQueueTotal] = useState(0);
   const [currentDuplicate, setCurrentDuplicate] = useState(null);
+  const [liveMsg, setLiveMsg] = useState(""); // for screen-reader announcements
   const chunkSize = 5 * 1024 * 1024; // 5 MB
   const { showNotification } = useNotification();
 
-  // ─── Resume in-progress uploads on component mount ───────────────────────
+  // Keep a map of active ManagedWebSocket instances so we can destroy them
+  const activeSockets = React.useRef(new Map());
+
+  // Helper: announce to screen reader without showing it visually
+  const announce = useCallback((msg) => {
+    setLiveMsg("");
+    // RAF ensures the DOM sees the empty string before the new one
+    requestAnimationFrame(() => setLiveMsg(msg));
+  }, []);
+
+  // ─── Resume in-progress uploads on component mount ──────────────────────
   useEffect(() => {
     if (!isHydrated) return;
 
-    const inProgressFiles = files.filter(f => 
+    const inProgressFiles = files.filter(f =>
       (f.status === "Uploading" || f.status === "Processing") && f.id
     );
 
     inProgressFiles.forEach(file => {
-      // Reconnect WebSocket for in-progress files
-      const ws = connectWS(file.id);
-      let wsErrorHandled = false;
-      const wsTimeout = setTimeout(() => {
-        if (!wsErrorHandled) {
-          wsErrorHandled = true;
-          console.error("WebSocket timeout for resumed file:", file.name);
-        }
-      }, 15000);
+      if (activeSockets.current.has(file.id)) return; // already connected
 
-      ws.onmessage = (event) => {
-        clearTimeout(wsTimeout);
-        try {
-          const data = JSON.parse(event.data);
+      const mws = new ManagedWebSocket(file.id, {
+        onMessage: (data) => {
           if (data.type !== "progress" || data.job_id !== file.id) return;
-
           const prog = data.progress;
-
           updateFile(file.id, {
             progress_upload: prog.upload_pct !== undefined ? Math.round(prog.upload_pct) : undefined,
             progress_processing: prog.process_pct !== undefined ? Math.round(prog.process_pct) : undefined,
             status:
-              prog.stage === "uploading"
-                ? "Uploading"
-                : prog.stage === "parsing" || prog.stage === "moving"
-                ? "Processing"
-                : prog.stage === "complete"
-                ? "Complete"
-                : undefined,
+              prog.stage === "uploading" ? "Uploading"
+              : prog.stage === "parsing" || prog.stage === "moving" ? "Processing"
+              : prog.stage === "complete" ? "Complete"
+              : undefined,
           });
-
           if (prog.stage === "complete") {
-            setTimeout(() => ws.close(), 1000);
+            mws.destroy();
+            activeSockets.current.delete(file.id);
             showNotification({ message: `${file.name} processed successfully`, type: "success" });
+            announce(`${file.name} has been processed successfully.`);
           }
-        } catch (err) {
-          console.error("Error processing resumed message:", err);
-        }
-      };
-
-      ws.onerror = () => {
-        clearTimeout(wsTimeout);
-        if (!wsErrorHandled) {
-          wsErrorHandled = true;
-          console.error("WebSocket error for resumed file:", file.name);
-        }
-      };
+        },
+        onReconnect: (attempt) => {
+          showNotification({ message: `Reconnecting to server… (attempt ${attempt})`, type: "warning" });
+          announce(`Connection lost. Reconnecting, attempt ${attempt}.`);
+        },
+        onMaxRetriesReached: () => {
+          updateFile(file.id, { error: "Connection lost. Could not reconnect.", status: "Error" });
+          showNotification({ message: `Could not reconnect for ${file.name}. Please try again.`, type: "error", duration: 7000 });
+          announce(`Connection permanently lost for ${file.name}.`);
+        },
+      });
+      activeSockets.current.set(file.id, mws);
     });
-  }, [isHydrated, files, updateFile, showNotification]);
+  }, [isHydrated]);
 
-  // ─── Process duplicate queue ──────────────────────────────────────────────
+  // Cleanup all sockets on unmount
+  useEffect(() => {
+    return () => {
+      activeSockets.current.forEach(mws => mws.destroy());
+      activeSockets.current.clear();
+    };
+  }, []);
+
+  // ─── Duplicate queue ────────────────────────────────────────────────────
   useEffect(() => {
     if (duplicateQueue.length > 0 && !currentDuplicate) {
       setCurrentDuplicate(duplicateQueue[0]);
     }
   }, [duplicateQueue, currentDuplicate]);
 
-  // ─── Drop handler with duplicate detection ────────────────────────────────
-  const onDrop = React.useCallback(acceptedFiles => {
+  // ─── Drop handler ────────────────────────────────────────────────────────
+  const onDrop = useCallback(acceptedFiles => {
     const duplicates = [];
-    
     acceptedFiles.forEach(file => {
       const existingFile = getFileByName(file.name);
-      
       if (existingFile && existingFile.status === "Pending") {
-        // Queue this duplicate for confirmation
         duplicates.push(file);
       } else if (existingFile && existingFile.status !== "Pending") {
-        // Completed files can be replaced without confirmation
         const newFile = createFileObject(file);
         replaceFile(existingFile.id, newFile);
         showNotification({ message: `${file.name} re-added for processing`, type: "info" });
       } else {
-        // New file
         const newFile = createFileObject(file);
         addFile(newFile);
         showNotification({ message: `${file.name} added`, type: "info" });
       }
     });
-
-    // Add all duplicates to queue
     if (duplicates.length > 0) {
       setDuplicateQueue(prev => [...prev, ...duplicates]);
       setDuplicateQueueTotal(prev => prev + duplicates.length);
@@ -121,7 +126,6 @@ export default function UploadSection() {
   const createFileObject = (file) => {
     const sizeMB = file.size / (1024 * 1024);
     const expectedTimeMs = Math.max(2000, sizeMB * 500);
-
     return {
       id: `${file.name}-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`,
       name: file.name,
@@ -150,65 +154,34 @@ export default function UploadSection() {
         showNotification({ message: `${currentDuplicate.name} will be replaced`, type: "warning" });
       }
     }
-    
-    // Move to next duplicate in queue
     setDuplicateQueue(prev => prev.slice(1));
     setCurrentDuplicate(null);
   };
 
-  // ─── Remove pending file ───────────────────────────────────────────────────
-  // Removed - now using removeFile from FileContext
-
-  // ─── Chunked upload with error handling ────────────────────────────────────
-  /**
-   * Uploads `fileObj.file` in chunks. Progress updates are sent from backend via WebSocket.
-   */
+  // ─── Chunked upload ──────────────────────────────────────────────────────
   const uploadFile = async (fileObj) => {
     const file = fileObj.file;
     const totalChunks = Math.ceil(file.size / chunkSize);
-
     try {
       for (let i = 0; i < totalChunks; i++) {
         const chunk = file.slice(i * chunkSize, (i + 1) * chunkSize);
-
-        await uploadChunk({
-          chunk,
-          chunkIndex: i,
-          totalChunks,
-          fileName: file.name,
-          fileId: fileObj.id,
-        });
+        await uploadChunk({ chunk, chunkIndex: i, totalChunks, fileName: file.name, fileId: fileObj.id });
       }
-      // Progress now sent from backend via WebSocket
     } catch (err) {
-      updateFile(fileObj.id, {
-        error: err.message || "Upload failed",
-        status: "Error",
-      });
-      
-      if (err.message && err.message.includes("Network")) {
-        showNotification({
-          message: `Network error uploading ${file.name}. Please check your connection.`,
-          type: "error",
-          duration: 6000,
-        });
-      } else {
-        showNotification({
-          message: `Failed to upload ${file.name}: ${err.message || "Unknown error"}`,
-          type: "error",
-          duration: 6000,
-        });
-      }
+      const msg = isNetworkError(err)
+        ? `Network error uploading ${file.name}. Please check your connection.`
+        : `Failed to upload ${file.name}: ${err.message || "Unknown error"}`;
+      updateFile(fileObj.id, { error: err.message || "Upload failed", status: "Error" });
+      showNotification({ message: msg, type: "error", duration: 6000 });
       throw err;
     }
   };
 
-  // ─── Start pipeline with comprehensive error handling ──────────────────────
+  // ─── Main pipeline ───────────────────────────────────────────────────────
   const startUpload = async () => {
     let pendingFiles = files.filter(f => f.status === "Pending");
     if (pendingFiles.length === 0) return;
 
-    // Check for files without blob data (loaded from localStorage)
     const filesWithoutBlob = pendingFiles.filter(f => !f.file);
     const filesWithBlob = pendingFiles.filter(f => f.file);
 
@@ -219,143 +192,92 @@ export default function UploadSection() {
         type: "warning",
         duration: 5000,
       });
-      // Remove files without blob from pending list
       pendingFiles = filesWithBlob;
       if (pendingFiles.length === 0) return;
     }
 
-    // Phase 1: mark all pending as Uploading and open WebSockets
     pendingFiles.forEach(f => {
       updateFile(f.id, { status: "Uploading", startedAt: Date.now(), uploadStartedAt: Date.now() });
     });
 
     const activeSessions = await Promise.all(pendingFiles.map(file =>
       new Promise((resolve) => {
-        const ws = connectWS(file.id);
-        let wsErrorHandled = false;
-        const wsTimeout = setTimeout(() => {
-          if (!wsErrorHandled) {
-            wsErrorHandled = true;
-            updateFile(file.id, {
-              error: "WebSocket connection timeout",
-              status: "Error",
-            });
-            showNotification({
-              message: `Connection timeout for ${file.name}. Server may be down.`,
-              type: "error",
-              duration: 6000,
-            });
-            ws.close();
-            resolve({ file, ws, error: true, errorType: "timeout" });
-          }
-        }, 15000); // 15 second timeout
+        // Destroy any stale socket for this file before opening a new one
+        if (activeSockets.current.has(file.id)) {
+          activeSockets.current.get(file.id).destroy();
+          activeSockets.current.delete(file.id);
+        }
 
-        ws.onmessage = (event) => {
-          clearTimeout(wsTimeout);
-          try {
-            const data = JSON.parse(event.data);
+        const mws = new ManagedWebSocket(file.id, {
+          onOpen: async () => {
+            showNotification({ message: `Uploading ${file.name}`, type: "info" });
+            announce(`Started uploading ${file.name}.`);
+            try {
+              await uploadFile(file);
+              fetchAPI("/process", "POST", { fileName: file.name, fileId: file.id, userId: "" })
+                .then(() => {
+                  showNotification({ message: `Processing ${file.name}`, type: "info" });
+                  announce(`${file.name} is now being processed.`);
+                })
+                .catch(err => {
+                  updateFile(file.id, { error: err.message || "Failed to start processing", status: "Error" });
+                  showNotification({ message: `Server error processing ${file.name}. Please try again.`, type: "error", duration: 6000 });
+                });
+              resolve({ file, mws });
+            } catch (err) {
+              resolve({ file, mws, error: true, errorType: "upload" });
+            }
+          },
+
+          onMessage: (data) => {
             if (data.type !== "progress" || data.job_id !== file.id) return;
-
             const prog = data.progress;
 
-            // Handle completion and other state updates
             updateFile(file.id, {
               progress_upload: prog.upload_pct !== undefined ? Math.round(prog.upload_pct) : undefined,
               progress_processing: prog.process_pct !== undefined ? Math.round(prog.process_pct) : undefined,
               status:
-                prog.stage === "uploading"
-                  ? "Uploading"
-                  : prog.stage === "parsing" || prog.stage === "moving"
-                  ? "Processing"
-                  : prog.stage === "complete"
-                  ? "Complete"
-                  : undefined,
-              uploadCompletedAt:
-                prog.upload_pct === 100 && !files.find(f => f.id === file.id)?.uploadCompletedAt
-                  ? Date.now()
-                  : undefined,
-              processStartedAt:
-                (prog.stage === "parsing" || prog.stage === "moving") &&
-                !files.find(f => f.id === file.id)?.processStartedAt
-                  ? Date.now()
-                  : undefined,
-              processCompletedAt:
-                prog.stage === "complete" && !files.find(f => f.id === file.id)?.processCompletedAt
-                  ? Date.now()
-                  : undefined,
-              completedAt: prog.stage === "complete" && !files.find(f => f.id === file.id)?.completedAt ? Date.now() : undefined,
+                prog.stage === "uploading" ? "Uploading"
+                : prog.stage === "parsing" || prog.stage === "moving" ? "Processing"
+                : prog.stage === "complete" ? "Complete"
+                : undefined,
+              uploadCompletedAt: prog.upload_pct === 100 ? Date.now() : undefined,
+              processStartedAt: (prog.stage === "parsing" || prog.stage === "moving") ? Date.now() : undefined,
+              processCompletedAt: prog.stage === "complete" ? Date.now() : undefined,
+              completedAt: prog.stage === "complete" ? Date.now() : undefined,
             });
 
             if (prog.stage === "complete") {
-              setTimeout(() => ws.close(), 1000);
+              mws.destroy();
+              activeSockets.current.delete(file.id);
               showNotification({ message: `${file.name} processed successfully`, type: "success" });
+              announce(`${file.name} has been processed successfully.`);
             }
-          } catch (err) {
-            console.error("Error processing message:", err);
-            updateFile(file.id, {
-              error: "Failed to parse server message",
-              status: "Error",
-            });
-          }
-        };
+          },
 
-        ws.onopen = async () => {
-          clearTimeout(wsTimeout);
-          showNotification({ message: `Uploading ${file.name}`, type: "info" });
-          try {
-            await uploadFile(file);
+          onReconnect: (attempt) => {
+            showNotification({ message: `Reconnecting for ${file.name}… (attempt ${attempt})`, type: "warning" });
+            announce(`Reconnecting for ${file.name}, attempt ${attempt}.`);
+          },
 
-            // After upload, trigger backend processing
-            fetchAPI("/process", "POST", { fileName: file.name, fileId: file.id, userId: "" })
-              .then(() => showNotification({ message: `Processing ${file.name}`, type: "info" }))
-              .catch(err => {
-                console.error("Failed to start processing for", file.name, err);
-                updateFile(file.id, {
-                  error: err.message || "Failed to start processing",
-                  status: "Error",
-                });
-                showNotification({
-                  message: `Server error processing ${file.name}. Please try again.`,
-                  type: "error",
-                  duration: 6000,
-                });
-              });
+          onMaxRetriesReached: () => {
+            updateFile(file.id, { error: "Connection lost. Could not reconnect.", status: "Error" });
+            showNotification({ message: `Could not reconnect for ${file.name}. Check server status.`, type: "error", duration: 7000 });
+            announce(`Connection permanently lost for ${file.name}.`);
+            resolve({ file, mws, error: true, errorType: "connection" });
+          },
+        });
 
-            resolve({ file, ws });
-          } catch (err) {
-            // uploadFile already updated state and showed notification
-            resolve({ file, ws, error: true, errorType: "upload" });
-          }
-        };
-
-        ws.onerror = (err) => {
-          clearTimeout(wsTimeout);
-          if (!wsErrorHandled) {
-            wsErrorHandled = true;
-            console.error("WS error for", file.name, err);
-            updateFile(file.id, {
-              error: "WebSocket connection failed",
-              status: "Error",
-            });
-            showNotification({
-              message: `Connection error for ${file.name}. Check server status.`,
-              type: "error",
-              duration: 6000,
-            });
-            resolve({ file, ws, error: true, errorType: "connection" });
-          }
-        };
+        activeSockets.current.set(file.id, mws);
       })
     ));
 
-    // Manage sessions and provide feedback
-    const errorSessions = activeSessions.filter(s => s.error);
+    const errorSessions = activeSessions.filter(s => s?.error);
     if (errorSessions.length > 0) {
-      const errorCount = errorSessions.length;
-      const successCount = activeSessions.length - errorCount;
+      const successCount = activeSessions.length - errorSessions.length;
       if (successCount > 0) {
         showNotification({
-          message: `${successCount} file(s) queued, ${errorCount} failed. Check details above.`,
+          message: `${successCount} file(s) queued, ${errorSessions.length} failed.`,
           type: "warning",
           duration: 5000,
         });
@@ -363,39 +285,63 @@ export default function UploadSection() {
     }
   };
 
-  const { getRootProps, getInputProps, isDragActive } = useDropzone({
+  const { getRootProps, getInputProps, isDragActive, open } = useDropzone({
     onDrop,
-    accept: {
-      'text/csv': ['.csv']
-    }
+    accept: { 'text/csv': ['.csv'] },
+    noClick: true,   // we handle click/keyboard manually for accessibility
+    noKeyboard: true,
   });
 
+  const hasPendingFiles = files.some(f => f.status === "Pending");
+
   return (
-    <section className="mb-16">
+    <section className="mb-16" role="region" aria-label="File upload area">
+      {/* Visually-hidden live region for screen-reader announcements */}
+      <div
+        aria-live="polite"
+        aria-atomic="true"
+        className="sr-only"
+        style={{ position: "absolute", width: 1, height: 1, overflow: "hidden", clip: "rect(0,0,0,0)", whiteSpace: "nowrap" }}
+      >
+        {liveMsg}
+      </div>
+
+      {/* Dropzone */}
       <div
         {...getRootProps()}
+        role="button"
+        tabIndex={0}
+        aria-label={isDragActive ? "Release to drop CSV files" : "Drop CSV files here or press Enter to browse"}
+        onKeyDown={(e) => {
+          if (e.key === "Enter" || e.key === " ") {
+            e.preventDefault();
+            open();
+          }
+        }}
+        onClick={open}
         className={cn(
           "relative overflow-hidden rounded-[2.5rem] p-12 lg:p-20 border-2 border-dashed transition-all text-center mb-8 cursor-pointer group",
-          isDragActive 
-            ? "border-indigo-500 bg-indigo-500/10 shadow-[0_0_50px_rgba(79,70,229,0.2)]" 
+          isDragActive
+            ? "border-indigo-500 bg-indigo-500/10 shadow-[0_0_50px_rgba(79,70,229,0.2)]"
             : "border-white/10 bg-white/[0.02] hover:bg-white/[0.05] hover:border-indigo-500/50"
         )}
       >
-        <div className="absolute top-0 right-0 -mr-20 -mt-20 h-64 w-64 rounded-full bg-indigo-600/5 blur-3xl" />
-        <div className="absolute bottom-0 left-0 -ml-20 -mb-20 h-64 w-64 rounded-full bg-purple-600/5 blur-3xl" />
+        <div className="absolute top-0 right-0 -mr-20 -mt-20 h-64 w-64 rounded-full bg-indigo-600/5 blur-3xl" aria-hidden="true" />
+        <div className="absolute bottom-0 left-0 -ml-20 -mb-20 h-64 w-64 rounded-full bg-purple-600/5 blur-3xl" aria-hidden="true" />
 
-        <input {...getInputProps()} />
+        <input {...getInputProps()} aria-hidden="true" />
         <div className="relative z-10">
-          <div className="mx-auto mb-8 flex h-24 w-24 items-center justify-center rounded-3xl bg-indigo-600/10 text-indigo-400 border border-indigo-500/20 group-hover:scale-110 transition-transform duration-500">
+          <div
+            className="mx-auto mb-8 flex h-24 w-24 items-center justify-center rounded-3xl bg-indigo-600/10 text-indigo-400 border border-indigo-500/20 group-hover:scale-110 transition-transform duration-500"
+            aria-hidden="true"
+          >
             <Upload size={40} />
           </div>
           <h4 className="text-2xl md:text-3xl font-black mb-4 text-white">
             {isDragActive ? (
               <span className="text-indigo-400">Release to drop files</span>
             ) : (
-              <>
-                Drop datasets or <span className="text-indigo-500">Browse</span>
-              </>
+              <>Drop datasets or <span className="text-indigo-500">Browse</span></>
             )}
           </h4>
           <p className="text-gray-500 text-lg font-medium max-w-md mx-auto">
@@ -405,15 +351,17 @@ export default function UploadSection() {
       </div>
 
       <File files={files} onRemove={removeFile} />
-      
-      {files.some(f => f.status === "Pending") && (
+
+      {hasPendingFiles && (
         <motion.button
           initial={{ opacity: 0, y: 10 }}
           animate={{ opacity: 1, y: 0 }}
           onClick={startUpload}
+          aria-label="Start Processing Pipeline"
+          aria-disabled={!hasPendingFiles}
           className="w-full sm:w-auto mt-8 bg-indigo-600 text-white px-10 py-5 rounded-2xl font-black text-xl shadow-[0_0_30px_rgba(79,70,229,0.3)] hover:scale-105 active:scale-95 transition-all flex items-center justify-center gap-3"
         >
-          <Play size={20} fill="currentColor" />
+          <Play size={20} fill="currentColor" aria-hidden="true" />
           Start Processing Pipeline
         </motion.button>
       )}

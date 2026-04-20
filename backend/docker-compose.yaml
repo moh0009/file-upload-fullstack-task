@@ -1,0 +1,45 @@
+services:
+  db:
+    image: postgres:latest
+    restart: always
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_USER: root
+      POSTGRES_PASSWORD: toor
+      POSTGRES_DB: pace_db
+    volumes:
+      - local_pgdata:/var/lib/postgresql
+    networks:
+      - db_network
+  pgadmin:
+    image: dpage/pgadmin4
+    container_name: pgadmin4_container
+    restart: always
+    ports:
+      - "8888:80"
+    environment:
+      PGADMIN_DEFAULT_EMAIL: admin@admin.com
+      PGADMIN_DEFAULT_PASSWORD: toor
+    volumes:
+      - pgadmin-data:/var/lib/pgadmin
+    networks:
+      - db_network
+
+  redis:
+    image: redis:latest
+    restart: always
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis-data:/data
+    networks:
+      - db_network
+
+volumes:
+  local_pgdata:
+  pgadmin-data:
+  redis-data:
+
+networks:
+  db_network:

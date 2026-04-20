@@ -25,7 +25,6 @@ type ProcessJob struct {
 	UserID      string     `json:"user_id"`
 	FileName    string     `json:"file_name"`
 	FileSize    int64      `json:"file_size"`
-	Priority    int        `json:"priority"`
 	Status      JobStatus  `json:"status"`
 	CreatedAt   time.Time  `json:"created_at"`
 	StartedAt   *time.Time `json:"started_at,omitempty"`
@@ -70,8 +69,8 @@ func (q *RedisQueue) Enqueue(ctx context.Context, job *ProcessJob) error {
 		return err
 	}
 
-	// Priority scoring: higher priority + older jobs = higher score
-	score := float64(job.Priority)*1e12 + float64(time.Now().UnixNano()-job.CreatedAt.UnixNano())
+	// Score: older jobs = higher score (lower timestamp diff)
+	score := float64(time.Now().UnixNano() - job.CreatedAt.UnixNano())
 
 	pipe := q.client.Pipeline()
 	pipe.HSet(ctx, q.jobsKey, job.ID, jobData)
@@ -139,10 +138,9 @@ func (q *RedisQueue) UpdateStatus(ctx context.Context, jobID string, status JobS
 		job.WorkerID = ""
 		job.StartedAt = nil
 		job.Error = fmt.Sprintf("retry %d: %s", job.RetryCount, errMsg)
-		job.Priority = max(0, job.Priority-1)
 
 		newJobData, _ := json.Marshal(job)
-		score := float64(job.Priority)*1e12 + float64(time.Now().UnixNano())
+		score := float64(time.Now().UnixNano())
 
 		pipe := q.client.Pipeline()
 		pipe.HSet(ctx, q.jobsKey, jobID, newJobData)
@@ -187,7 +185,7 @@ func (q *RedisQueue) RecoverStaleJobs(ctx context.Context) ([]string, error) {
 					job.Error = fmt.Sprintf("recovered from crashed worker %s", wid)
 					newJData, _ := json.Marshal(job)
 
-					score := float64(job.Priority)*1e12 + float64(time.Now().UnixNano())
+					score := float64(time.Now().UnixNano())
 					pipe := q.client.Pipeline()
 					pipe.HSet(ctx, q.jobsKey, jid, newJData)
 					pipe.ZAdd(ctx, q.queueKey, redis.Z{Score: score, Member: jid})
@@ -221,9 +219,3 @@ func isRecoverable(err string) bool {
 	return false
 }
 
-func max(a, b int) int {
-	if a > b {
-		return a
-	}
-	return b
-}
