@@ -1,5 +1,6 @@
 import { Inter } from "next/font/google";
 import "./globals.css";
+import logo from "../../public/logo.png";
 
 export const metadata = {
   title: "PACE | Smart Student Data Management",
@@ -21,6 +22,10 @@ export default function RootLayout({ children }) {
           rel="stylesheet"
           href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap"
         />
+        <link rel="icon" href={logo} />
+        <meta name="description" content={metadata.description} />
+        <meta name="keywords" content={metadata.keywords.join(", ")} />
+        <title>{metadata.title}</title>
       </head>
       <body className={inter.className}>
         <NotificationProvider>
