@@ -10,8 +10,8 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/jackc/pgx/v5/pgxpool"
-	apperrors "github.com/moh0009/file-upload-fullstack-task/backend/errors"
 	"github.com/moh0009/file-upload-fullstack-task/backend/config"
+	apperrors "github.com/moh0009/file-upload-fullstack-task/backend/errors"
 	"github.com/moh0009/file-upload-fullstack-task/backend/progress"
 	"github.com/moh0009/file-upload-fullstack-task/backend/queue"
 	"github.com/moh0009/file-upload-fullstack-task/backend/worker"
@@ -70,13 +70,6 @@ func (h *Handler) UploadFiles(c *gin.Context) {
 		apperrors.Respond(c, apperrors.BadRequest(
 			fmt.Sprintf("file exceeds maximum allowed size of %d bytes", h.Cfg.MaxFileSize),
 		))
-		return
-	}
-
-	// Validate MIME type
-	ct := file.Header.Get("Content-Type")
-	if ct != "text/csv" && !strings.Contains(ct, "text/csv") {
-		apperrors.Respond(c, apperrors.BadRequest("invalid MIME type: only text/csv is accepted"))
 		return
 	}
 
