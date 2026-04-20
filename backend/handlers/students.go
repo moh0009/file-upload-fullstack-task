@@ -8,7 +8,6 @@ import (
 	"strings"
 
 	"github.com/gin-gonic/gin"
-	"github.com/moh0009/file-upload-fullstack-task/backend/errors"
 )
 
 type StudentDB struct {
@@ -59,8 +58,7 @@ func (h *Handler) GetStudentsCount(c *gin.Context) {
 	row := h.Db.QueryRow(context.Background(), query, args...)
 	var count int
 	if err := row.Scan(&count); err != nil {
-		appErr := errors.Wrap(err, errors.ErrorTypeDatabase, "DB_QUERY_FAILED", "Failed to count students", http.StatusInternalServerError)
-		c.JSON(appErr.StatusCode, errors.NewErrorResponse(appErr))
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Database error"})
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{"count": count})
@@ -69,9 +67,8 @@ func (h *Handler) GetStudentsCount(c *gin.Context) {
 func (h *Handler) GetStudents(c *gin.Context) {
 	pageSizeStr := c.Query("pageSize")
 	pageSize, err := strconv.Atoi(pageSizeStr)
-	if err != nil || pageSize <= 0 || pageSize > 1000 {
-		appErr := errors.NewInvalidInputError("pageSize", "must be a positive integer between 1 and 1000")
-		c.JSON(appErr.StatusCode, errors.NewErrorResponse(appErr))
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid page size"})
 		return
 	}
 
@@ -202,8 +199,7 @@ func (h *Handler) GetStudents(c *gin.Context) {
 
 	rows, err := h.Db.Query(context.Background(), query, args...)
 	if err != nil {
-		appErr := errors.Wrap(err, errors.ErrorTypeDatabase, "DB_QUERY_FAILED", "Failed to retrieve students", http.StatusInternalServerError)
-		c.JSON(appErr.StatusCode, errors.NewErrorResponse(appErr))
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Database query failed"})
 		return
 	}
 	defer rows.Close()
@@ -212,17 +208,10 @@ func (h *Handler) GetStudents(c *gin.Context) {
 	for rows.Next() {
 		var student StudentDB
 		if err := rows.Scan(&student.ID, &student.Name, &student.Subject, &student.Grade); err != nil {
-			appErr := errors.Wrap(err, errors.ErrorTypeDatabase, "DB_SCAN_FAILED", "Failed to process student data", http.StatusInternalServerError)
-			c.JSON(appErr.StatusCode, errors.NewErrorResponse(appErr))
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to scan student data"})
 			return
 		}
 		students = append(students, student)
-	}
-
-	if err := rows.Err(); err != nil {
-		appErr := errors.Wrap(err, errors.ErrorTypeDatabase, "DB_ITERATION_FAILED", "Error iterating through results", http.StatusInternalServerError)
-		c.JSON(appErr.StatusCode, errors.NewErrorResponse(appErr))
-		return
 	}
 
 	if beforeIdStr != "" {
@@ -237,23 +226,14 @@ func (h *Handler) GetStudents(c *gin.Context) {
 func (h *Handler) DeleteStudent(c *gin.Context) {
 	idStr := c.Param("id")
 	id, err := strconv.Atoi(idStr)
-	if err != nil || id <= 0 {
-		appErr := errors.NewInvalidInputError("id", "must be a positive integer")
-		c.JSON(appErr.StatusCode, errors.NewErrorResponse(appErr))
-		return
-	}
-
-	result, err := h.Db.Exec(context.Background(), "DELETE FROM students WHERE id = $1", id)
 	if err != nil {
-		appErr := errors.Wrap(err, errors.ErrorTypeDatabase, "DB_DELETE_FAILED", "Failed to delete student", http.StatusInternalServerError)
-		c.JSON(appErr.StatusCode, errors.NewErrorResponse(appErr))
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid student ID"})
 		return
 	}
 
-	rowsAffected := result.RowsAffected()
-	if rowsAffected == 0 {
-		appErr := errors.NewRecordNotFoundError("Student", id)
-		c.JSON(appErr.StatusCode, errors.NewErrorResponse(appErr))
+	_, err = h.Db.Exec(context.Background(), "DELETE FROM students WHERE id = $1", id)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to delete student"})
 		return
 	}
 
@@ -263,47 +243,20 @@ func (h *Handler) DeleteStudent(c *gin.Context) {
 func (h *Handler) UpdateStudent(c *gin.Context) {
 	idStr := c.Param("id")
 	id, err := strconv.Atoi(idStr)
-	if err != nil || id <= 0 {
-		appErr := errors.NewInvalidInputError("id", "must be a positive integer")
-		c.JSON(appErr.StatusCode, errors.NewErrorResponse(appErr))
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid student ID"})
 		return
 	}
 
 	var student StudentDB
 	if err := c.ShouldBindJSON(&student); err != nil {
-		appErr := errors.Wrap(err, errors.ErrorTypeValidation, "INVALID_JSON", "Invalid request body format", http.StatusBadRequest)
-		c.JSON(appErr.StatusCode, errors.NewErrorResponse(appErr))
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid request body"})
 		return
 	}
 
-	// Validate required fields
-	if student.Name == "" {
-		appErr := errors.NewMissingRequiredFieldError("name")
-		c.JSON(appErr.StatusCode, errors.NewErrorResponse(appErr))
-		return
-	}
-	if student.Subject == "" {
-		appErr := errors.NewMissingRequiredFieldError("subject")
-		c.JSON(appErr.StatusCode, errors.NewErrorResponse(appErr))
-		return
-	}
-	if student.Grade < 0 || student.Grade > 100 {
-		appErr := errors.NewInvalidInputError("grade", "must be between 0 and 100")
-		c.JSON(appErr.StatusCode, errors.NewErrorResponse(appErr))
-		return
-	}
-
-	result, err := h.Db.Exec(context.Background(), "UPDATE students SET name = $1, subject = $2, grade = $3 WHERE id = $4", student.Name, student.Subject, student.Grade, id)
+	_, err = h.Db.Exec(context.Background(), "UPDATE students SET name = $1, subject = $2, grade = $3 WHERE id = $4", student.Name, student.Subject, student.Grade, id)
 	if err != nil {
-		appErr := errors.Wrap(err, errors.ErrorTypeDatabase, "DB_UPDATE_FAILED", "Failed to update student", http.StatusInternalServerError)
-		c.JSON(appErr.StatusCode, errors.NewErrorResponse(appErr))
-		return
-	}
-
-	rowsAffected := result.RowsAffected()
-	if rowsAffected == 0 {
-		appErr := errors.NewRecordNotFoundError("Student", id)
-		c.JSON(appErr.StatusCode, errors.NewErrorResponse(appErr))
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update student"})
 		return
 	}
 

@@ -6,7 +6,6 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/gorilla/websocket"
-	"github.com/moh0009/file-upload-fullstack-task/backend/errors"
 )
 
 var upgrader = websocket.Upgrader{
@@ -23,18 +22,19 @@ var upgrader = websocket.Upgrader{
 
 func (h *Handler) HandleProgressWS(c *gin.Context) {
 	fileID := c.Query("fileId")
+	fmt.Printf("WebSocket request received for fileId: %s\n", fileID)
 	if fileID == "" {
-		appErr := errors.NewMissingRequiredFieldError("fileId")
-		c.JSON(appErr.StatusCode, errors.NewErrorResponse(appErr))
+		fmt.Println("Missing fileId")
+		c.JSON(400, gin.H{"error": "missing fileId"})
 		return
 	}
 
 	ws, err := upgrader.Upgrade(c.Writer, c.Request, nil)
 	if err != nil {
-		appErr := errors.Wrap(err, errors.ErrorTypeNetwork, "WEBSOCKET_UPGRADE_FAILED", "Failed to upgrade connection to WebSocket", http.StatusBadRequest)
-		c.JSON(appErr.StatusCode, errors.NewErrorResponse(appErr))
+		fmt.Printf("WebSocket upgrade failed: %v\n", err)
 		return
 	}
+	fmt.Printf("WebSocket upgrade successful for fileID: %s\n", fileID)
 
 	h.ProgressHub.Register(fileID, ws)
 	defer h.ProgressHub.Unregister(fileID)

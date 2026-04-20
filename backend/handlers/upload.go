@@ -11,7 +11,6 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/moh0009/file-upload-fullstack-task/backend/config"
-	"github.com/moh0009/file-upload-fullstack-task/backend/errors"
 	"github.com/moh0009/file-upload-fullstack-task/backend/progress"
 	"github.com/moh0009/file-upload-fullstack-task/backend/queue"
 	"github.com/moh0009/file-upload-fullstack-task/backend/worker"
@@ -50,42 +49,36 @@ func (h *Handler) UploadFiles(c *gin.Context) {
 	var meta ChunkMeta
 	file, err := c.FormFile("file")
 	if err != nil {
-		appErr := errors.Wrap(err, errors.ErrorTypeValidation, "MISSING_FILE", "No file provided in request", http.StatusBadRequest)
-		c.JSON(appErr.StatusCode, errors.NewErrorResponse(appErr))
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid request"})
 		return
 	}
 
 	if err := c.ShouldBind(&meta); err != nil {
-		appErr := errors.Wrap(err, errors.ErrorTypeValidation, "INVALID_METADATA", "Invalid or missing chunk metadata", http.StatusBadRequest)
-		c.JSON(appErr.StatusCode, errors.NewErrorResponse(appErr))
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid metadata"})
 		return
 	}
 
 	// Security: Validate file extension
 	if !strings.HasSuffix(strings.ToLower(meta.FileName), ".csv") {
-		appErr := errors.NewInvalidFileTypeError("text/csv", file.Header.Get("Content-Type"))
-		c.JSON(appErr.StatusCode, errors.NewErrorResponse(appErr))
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Only CSV files are allowed"})
 		return
 	}
 
 	// Security: Check file size
 	if file.Size > h.Cfg.MaxFileSize {
-		appErr := errors.NewFileTooLargeError(h.Cfg.MaxFileSize, file.Size)
-		c.JSON(appErr.StatusCode, errors.NewErrorResponse(appErr))
+		c.JSON(http.StatusBadRequest, gin.H{"error": "File too large"})
 		return
 	}
 
 	// Security: Validate MIME type
 	if file.Header.Get("Content-Type") != "text/csv" && !strings.Contains(file.Header.Get("Content-Type"), "text/csv") {
-		appErr := errors.NewInvalidFileTypeError("text/csv", file.Header.Get("Content-Type"))
-		c.JSON(appErr.StatusCode, errors.NewErrorResponse(appErr))
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid file type"})
 		return
 	}
 
 	chunkPath := filepath.Join(h.Cfg.UploadsDir, fmt.Sprintf("%s.part_%d", meta.FileName, meta.ChunkIndex))
 	if err := c.SaveUploadedFile(file, chunkPath); err != nil {
-		appErr := errors.Wrap(err, errors.ErrorTypeFileSystem, "CHUNK_SAVE_FAILED", "Failed to save file chunk", http.StatusInternalServerError)
-		c.JSON(appErr.StatusCode, errors.NewErrorResponse(appErr))
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to save chunk"})
 		return
 	}
 
@@ -100,8 +93,7 @@ func (h *Handler) UploadFiles(c *gin.Context) {
 
 	if meta.ChunkIndex == meta.TotalChunks-1 {
 		if err := h.MergeChunks(meta.FileName, meta.TotalChunks); err != nil {
-			appErr := errors.Wrap(err, errors.ErrorTypeFileSystem, "MERGE_FAILED", "Failed to merge file chunks", http.StatusInternalServerError)
-			c.JSON(appErr.StatusCode, errors.NewErrorResponse(appErr))
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to merge chunks"})
 			return
 		}
 		// Send final upload complete message

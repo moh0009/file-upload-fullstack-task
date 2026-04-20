@@ -17,7 +17,6 @@ type Config struct {
 	RedisPassword   string
 	ServerPort      string
 	UploadsDir      string
-	MigrationsDir   string
 	MaxFileSize     int64
 	ChunkSize       int64
 	WorkerCount     int
@@ -32,7 +31,6 @@ func Load() *Config {
 		RedisPassword:   getEnv("REDIS_PASSWORD", ""),
 		ServerPort:      getEnv("SERVER_PORT", "8080"),
 		UploadsDir:      getEnv("UPLOADS_DIR", "./uploads"),
-		MigrationsDir:   getEnv("MIGRATIONS_DIR", "./migrations"),
 		MaxFileSize:     getEnvInt64("MAX_FILE_SIZE", 100*1024*1024), // 100MB
 		ChunkSize:       getEnvInt64("CHUNK_SIZE", 5*1024*1024),      // 5MB
 		WorkerCount:     getEnvInt("WORKER_COUNT", 8),
