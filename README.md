@@ -13,12 +13,13 @@ A full-stack web application that ingests large CSV files containing student gra
 
 ### Students table
 
-![alt text](readme_media/two.png)
 ![alt text](readme_media/four.png)
 
 ## Video Demo
 
-![](readme_media/video_demo.mp4)
+<video width="1080" height="720" controls>
+  <source src="./readme_media/video_demo.mp4" type="video/mp4">
+</video>
 
 ## Features
 
