@@ -14,7 +14,7 @@ import (
 	"github.com/moh0009/PACE-platform/backend/handlers"
 )
 
-func getCORSOrigins() []string {
+func GetCORSOrigins() []string {
 	if os.Getenv("ENVIRONMENT") == "docker" {
 		// In Docker, frontend service is accessible by its service name
 		return []string{
@@ -47,9 +47,12 @@ func main() {
 	handler.WorkerMgr.Start()
 	defer handler.WorkerMgr.Shutdown()
 
+	origins := GetCORSOrigins()
+	handlers.SetWSOrigins(origins)
+
 	// Setup CORS with security restrictions (restrict to specific origins in production)
 	corsConfig := cors.Config{
-		AllowOrigins:     getCORSOrigins(),
+		AllowOrigins:     GetCORSOrigins(),
 		AllowMethods:     []string{"GET", "POST", "PUT", "DELETE"},
 		AllowHeaders:     []string{"Content-Type", "Authorization"},
 		AllowCredentials: true,
