@@ -45,6 +45,7 @@ services:
       REDIS_ADDR: "redis:6379"
       SERVER_PORT: "8080"
       UPLOADS_DIR: "/tmp/uploads"
+      ENVIRONMENT: "docker"
     depends_on:
       db:
         condition: service_healthy
@@ -60,7 +61,7 @@ services:
       args:
         # Pass the public API URL so the built Next.js bundle knows where to point.
         # This determines where the browser sends its requests.
-        NEXT_PUBLIC_API_URL: "http://localhost:8080/api"
+        NEXT_PUBLIC_API_URL: "http://backend:8080"
     restart: always
     ports:
       - "3000:3000"

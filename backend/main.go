@@ -14,6 +14,21 @@ import (
 	"github.com/moh0009/PACE-platform/backend/handlers"
 )
 
+func getCORSOrigins() []string {
+	if os.Getenv("ENVIRONMENT") == "docker" {
+		// In Docker, frontend service is accessible by its service name
+		return []string{
+			"http://frontend:3000",
+			"http://frontend:3001",
+		}
+	}
+	// Local development
+	return []string{
+		"http://localhost:3000",
+		"http://localhost:3001",
+	}
+}
+
 func main() {
 	// Load configuration from environment variables
 	cfg := config.Load()
@@ -34,7 +49,7 @@ func main() {
 
 	// Setup CORS with security restrictions (restrict to specific origins in production)
 	corsConfig := cors.Config{
-		AllowOrigins:     []string{"http://localhost:3000", "http://localhost:3001"},
+		AllowOrigins:     getCORSOrigins(),
 		AllowMethods:     []string{"GET", "POST", "PUT", "DELETE"},
 		AllowHeaders:     []string{"Content-Type", "Authorization"},
 		AllowCredentials: true,
@@ -49,11 +64,11 @@ func main() {
 		c.JSON(http.StatusOK, gin.H{"status": "ok"})
 	})
 
+	router.GET("/ws/progress", handler.HandleProgressWS)
 	// API routes for file upload and processing
 	api := router.Group("/api")
 	api.POST("/upload", handler.UploadFiles)
 	api.POST("/process", handler.ProcessPost)
-	api.GET("/ws/progress", handler.HandleProgressWS)
 
 	// Student management routes
 	students := api.Group("/students")

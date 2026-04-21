@@ -5,8 +5,8 @@ export function cn(...inputs) {
   return twMerge(clsx(inputs));
 }
 
-const BASE_URL = "http://localhost:8080/api";
-const WS_BASE_URL = "ws://localhost:8080/api";
+const BASE_URL = "/api";
+const WS_BASE_URL = "ws://localhost:8080";
 
 // ─── Error classification helpers ────────────────────────────────────────────
 
@@ -71,7 +71,7 @@ async function fetchAPI(path, method, body, signal) {
     return await res.json();
   } catch (err) {
     if (err.name === "AbortError") return null; // intentionally cancelled
-    throw err; // propagate with status code embedded
+    else if (isServerError(err) || isClientError(err)) console.log("server is down or unreachable !!"); // re-throw with status code info for server/client errors
   }
 }
 
