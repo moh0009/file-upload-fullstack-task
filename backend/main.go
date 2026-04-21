@@ -47,9 +47,6 @@ func main() {
 	handler.WorkerMgr.Start()
 	defer handler.WorkerMgr.Shutdown()
 
-	origins := GetCORSOrigins()
-	handlers.SetWSOrigins(origins)
-
 	// Setup CORS with security restrictions (restrict to specific origins in production)
 	corsConfig := cors.Config{
 		AllowOrigins:     GetCORSOrigins(),
